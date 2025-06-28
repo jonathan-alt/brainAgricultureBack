@@ -57,13 +57,13 @@ async def setup_database():
                 )
             """)
             
-            logger.info("✅ Tabelas criadas com sucesso!")
+            logger.info("Tabelas criadas com sucesso!")
             
         finally:
             await conn.close()
         
     except Exception as e:
-        logger.error(f"❌ Erro ao configurar banco de dados: {e}")
+        logger.error(f"Erro ao configurar banco de dados: {e}")
         raise e
 
 if __name__ == "__main__":

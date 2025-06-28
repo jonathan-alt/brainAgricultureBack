@@ -1,0 +1,88 @@
+version: "3.8"
+
+services:
+  # Banco de dados de teste
+  test-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: brain_agriculture_test
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+    ports:
+      - "5433:5432" # Porta diferente para não conflitar com dev
+    volumes:
+      - test_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d brain_agriculture_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Aplicação de teste
+  test-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - ENVIRONMENT=test
+      - DATABASE_URL=postgresql://test_user:test_password@test-db:5432/brain_agriculture_test
+      - USER=test_user
+      - PASSWORD=test_password
+      - HOST=test-db
+      - PORT=5432
+      - DATABASE=brain_agriculture_test
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+    depends_on:
+      test-db:
+        condition: service_healthy
+    command: ["./run_tests.sh"]
+    profiles:
+      - test
+
+  # Aplicação de teste sem banco (para testes unitários)
+  test-app-unit:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - ENVIRONMENT=test
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+    command: ["./run_tests.sh", "-u"]
+    profiles:
+      - test
+
+  # Aplicação de teste apenas integração
+  test-app-integration:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - ENVIRONMENT=test
+      - DATABASE_URL=postgresql://test_user:test_password@test-db:5432/brain_agriculture_test
+      - USER=test_user
+      - PASSWORD=test_password
+      - HOST=test-db
+      - PORT=5432
+      - DATABASE=brain_agriculture_test
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+    depends_on:
+      test-db:
+        condition: service_healthy
+    command: ["./run_tests.sh", "-i"]
+    profiles:
+      - test
+
+volumes:
+  test_db_data:

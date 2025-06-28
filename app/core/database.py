@@ -8,6 +8,9 @@ logger = logging.getLogger()
 
 async def get_db(config: Config):
     try:
+        # Configuração SSL baseada no ambiente
+        ssl_config = 'require' if config.ENVIRONMENT != 'test' else None
+        
         pool = await asyncpg.create_pool(
             user=config.AGRICULTURE_DB_USER,
             password=config.AGRICULTURE_DB_PASSWORD,
@@ -16,7 +19,7 @@ async def get_db(config: Config):
             port=config.AGRICULTURE_DB_PORT,
             min_size=1,
             max_size=5,
-            ssl='require',
+            ssl=ssl_config,
             command_timeout=60,
             server_settings={
                 'application_name': 'brain_agriculture_app'

@@ -1,0 +1,33 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements/development.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r development.txt
+
+# Copy application code
+COPY . .
+
+# Create test directories if they don't exist
+RUN mkdir -p tests/unit tests/integration
+
+# Make test script executable
+RUN chmod +x run_tests.sh
+
+# Set environment variables for testing
+ENV PYTHONPATH=/app
+ENV ENVIRONMENT=test
+
+# Default command to run tests
+CMD ["./run_tests.sh"] 

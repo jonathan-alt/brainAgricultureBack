@@ -21,7 +21,7 @@ async def check_existing_tables():
             port=config.AGRICULTURE_DB_PORT,
         )
         
-        logger.info("✅ Conectado ao banco de dados!")
+        logger.info("Conectado ao banco de dados!")
         
         # Verificar tabelas existentes
         tables_query = """
@@ -34,7 +34,7 @@ async def check_existing_tables():
         
         tables = await conn.fetch(tables_query)
         
-        logger.info("📋 Tabelas existentes no banco:")
+        logger.info("Tabelas existentes no banco:")
         for table in tables:
             logger.info(f"  - {table['table_name']}")
         
@@ -42,17 +42,17 @@ async def check_existing_tables():
         expected_tables = ['produtor', 'fazenda', 'safra']
         existing_table_names = [table['table_name'] for table in tables]
         
-        logger.info("\n🔍 Verificação das tabelas necessárias:")
+        logger.info("\nVerificação das tabelas necessárias:")
         for table in expected_tables:
             if table in existing_table_names:
-                logger.info(f"  ✅ {table} - EXISTE")
+                logger.info(f"  {table} - EXISTE")
             else:
-                logger.info(f"  ❌ {table} - NÃO EXISTE")
+                logger.info(f"  {table} - NÃO EXISTE")
         
         await conn.close()
         
     except Exception as e:
-        logger.error(f"❌ Erro ao verificar tabelas: {e}")
+        logger.error(f"Erro ao verificar tabelas: {e}")
         raise e
 
 if __name__ == "__main__":

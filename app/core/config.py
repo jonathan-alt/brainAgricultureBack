@@ -60,6 +60,8 @@ class ConfigFactory:
             return ConfigFromEnviron()
         elif environment == "production":
             return ConfigFromEnviron()
+        elif environment == "test":
+            return ConfigFromEnviron()
         else:
             logger.critical(f"Invalid environment: {environment}")
             raise Exception("Invalid")

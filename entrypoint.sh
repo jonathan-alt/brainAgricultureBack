@@ -6,16 +6,16 @@ set -o nounset
 # Configurar PYTHONPATH
 export PYTHONPATH=.
 
-echo "🔍 Verificando tabelas existentes no banco de dados..."
+echo "Verificando tabelas existentes no banco de dados..."
 python scripts/check_tables.py
 
-echo "📋 Verificando se é necessário criar tabelas..."
+echo "Verificando se é necessário criar tabelas..."
 python scripts/setup_db.py
 
-#echo "🌱 Limpando as tabelas..."
+#echo "Limpando as tabelas..."
 #python scripts/clear_data.py
 
-#echo "🌱 Populando banco com dados mockados..."
+#echo "Populando banco com dados mockados..."
 #python scripts/seed_data.py
 
 exec "$@"

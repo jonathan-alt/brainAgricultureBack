@@ -21,6 +21,9 @@ from app.brain_agriculture.schemas.brain_agriculture import (
     ResumoFazendas,
     FazendaResumida,
     ProdutorResumido,
+    ProdutorCreate,
+    FazendaCreate,
+    SafraCreate,
 )
 from app.brain_agriculture.models.brain_agriculture import Produtor as ProdutorModel, Fazenda as FazendaModel, Safra as SafraModel
 
@@ -66,7 +69,7 @@ class Brain_AgricultureService(BaseService):
             logger.error(f"Erro ao buscar produtor {produtor_id}: {e}")
             raise e
 
-    async def create_produtor(self, produtor_data: Produtor) -> ReturnSucess:
+    async def create_produtor(self, produtor_data: ProdutorCreate) -> ReturnSucess:
         """Cria um novo produtor"""
         try:
             # Verificar se já existe um produtor com o mesmo CPF
@@ -207,7 +210,7 @@ class Brain_AgricultureService(BaseService):
             logger.error(f"Erro ao buscar fazendas do produtor {produtor_id}: {e}")
             raise e
 
-    async def create_fazenda(self, fazenda_data: Fazenda) -> ReturnSucess:
+    async def create_fazenda(self, fazenda_data: FazendaCreate) -> ReturnSucess:
         """Cria uma nova fazenda"""
         try:
             # Verificar se o produtor existe
@@ -361,7 +364,7 @@ class Brain_AgricultureService(BaseService):
             logger.error(f"Erro ao buscar safras do ano {ano}: {e}")
             raise e
 
-    async def create_safra(self, safra_data: Safra) -> ReturnSucess:
+    async def create_safra(self, safra_data: SafraCreate) -> ReturnSucess:
         """Cria uma nova safra"""
         try:
             # Verificar se a fazenda existe

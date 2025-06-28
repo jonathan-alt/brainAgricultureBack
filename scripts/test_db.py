@@ -16,16 +16,16 @@ async def test_database_connection():
             port=config.AGRICULTURE_DB_PORT,
         )
         
-        logger.info("✅ Conexão com banco de dados estabelecida com sucesso!")
+        logger.info("Conexão com banco de dados estabelecida com sucesso!")
         
         # Testar uma query simples
         result = await conn.fetchval('SELECT 1')
-        logger.info(f"✅ Query de teste executada: {result}")
+        logger.info(f"Query de teste executada: {result}")
         
         await conn.close()
         
     except Exception as e:
-        logger.error(f"❌ Erro ao conectar com banco de dados: {e}")
+        logger.error(f"Erro ao conectar com banco de dados: {e}")
         raise e
 
 if __name__ == "__main__":
