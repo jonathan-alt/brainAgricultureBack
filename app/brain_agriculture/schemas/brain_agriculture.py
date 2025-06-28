@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+
 from typing import List, Optional
 from uuid import UUID
 
@@ -27,3 +27,31 @@ class Safra(BaseModel):
     ano: int = Field(example=2025, description="Ano da safra")
     cultura: str = Field(example="Soja", description="Cultura plantada")
     idfazenda: int = Field(example=1, description="ID da fazenda (chave estrangeira)")
+
+
+class DadosFazenda(BaseModel):
+    """Schema para dados de fazenda"""
+    id: Optional[int] = Field(example=1, description="ID da visualização")
+    fazenda: str = Field(example="Fazenda Nova", description="Nome da fazenda")
+    # Adicione outros campos conforme necessário para sua visualização analítica
+
+
+class ReturnSucess(BaseModel):
+    """Schema para retorno de sucesso"""
+    success: bool = Field(example=True, description="Indica se a operação foi bem-sucedida")
+    message: str = Field(example="Operação realizada com sucesso", description="Mensagem de retorno")
+    data: Optional[dict] = Field(example={}, description="Dados retornados")
+
+
+class Brain_Agriculture(BaseModel):
+    """Schema principal do Brain Agriculture"""
+    id: Optional[int] = Field(example=1, description="ID do registro")
+    fazenda: str = Field(example="Fazenda Nova", description="Nome da fazenda")
+    # Adicione outros campos conforme necessário para sua aplicação
+
+
+class ReceiveBrain_AgricultureSchema(BaseModel):
+    """Schema para recebimento de dados do Brain Agriculture"""
+    id: Optional[int] = Field(example=1, description="ID do registro")
+    fazenda: str = Field(example="Fazenda Nova", description="Nome da fazenda")
+    # Adicione outros campos conforme necessário para recebimento de dados

@@ -28,16 +28,14 @@ class Config(metaclass=ConfigSingletonMeta):
 
     def populate_settings(self):
         vars = self.get_vars()
-        self.SENSOR_DB_USER = vars.get("SENSOR_DB_USER")
-        self.SENSOR_DB_PASSWORD = vars.get("SENSOR_DB_PASSWORD")
-        self.SENSOR_DB_HOST = vars.get("SENSOR_DB_HOST")
-        self.SENSOR_DB_PORT = vars.get("SENSOR_DB_PORT")
-        self.SENSOR_DB_DATABASE = vars.get("SENSOR_DB_DATABASE")
-        self.REDIS_HOST = vars.get("REDIS_HOST")
-        self.REDIS_PORT = vars.get("REDIS_PORT")
+        self.AGRICULTURE_DB_USER = vars.get("USER")
+        self.AGRICULTURE_DB_PASSWORD = vars.get("PASSWORD")
+        self.AGRICULTURE_DB_HOST = vars.get("HOST")
+        self.AGRICULTURE_DB_PORT = vars.get("PORT")
+        self.AGRICULTURE_DB_DATABASE = vars.get("DATABASE")
         self.ENVIRONMENT = vars.get("ENVIRONMENT")
         self.ENCRYPTION_KEY = vars.get("ENCRYPTION_KEY")
-        self.SENSOR_QUEUE = f"report_{self.ENVIRONMENT}"
+        self.AGRICULTURE_QUEUE = f"report_{self.ENVIRONMENT}"
 
 
 class ConfigFromEnviron(Config):

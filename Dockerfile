@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements first for better caching
 COPY requirements/development.txt .
+
 RUN pip install --no-cache-dir -r development.txt
 
 # Copy application code
