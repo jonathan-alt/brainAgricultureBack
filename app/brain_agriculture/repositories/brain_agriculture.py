@@ -293,5 +293,88 @@ class Brain_AgricultureRepository(BaseRepository):
             session.commit()
             return True
 
+    def get_fazendas_por_estado(self) -> List[dict]:
+        """Busca estatísticas de fazendas por estado"""
+        if self.db is None:
+            logger.warning("Banco de dados não disponível, retornando lista vazia")
+            return []
+        
+        with Session(self.db) as session:
+            # Query para contar fazendas por estado
+            from sqlalchemy import func
+            from sqlmodel import text
+            
+            query = text("""
+                SELECT 
+                    estado,
+                    COUNT(*) as quantidade
+                FROM fazenda 
+                GROUP BY estado 
+                ORDER BY quantidade DESC
+            """)
+            
+            result = session.exec(query)
+            return [{"estado": row.estado, "quantidade": row.quantidade} for row in result]
+
+    def get_total_fazendas(self) -> int:
+        """Retorna o total de fazendas"""
+        if self.db is None:
+            logger.warning("Banco de dados não disponível")
+            return 0
+        
+        with Session(self.db) as session:
+            from sqlalchemy import func
+            result = session.exec(select(func.count(Fazenda.id))).first()
+            return result or 0
+
+    def get_total_culturas(self) -> int:
+        """Retorna o total de culturas plantadas (total de registros de safras)"""
+        if self.db is None:
+            logger.warning("Banco de dados não disponível")
+            return 0
+        
+        with Session(self.db) as session:
+            from sqlalchemy import func
+            result = session.exec(select(func.count(Safra.id))).first()
+            return result or 0
+
+    def get_culturas_agrupadas(self) -> list:
+        """Retorna o total de cada cultura plantada (agrupado por nome da cultura)"""
+        if self.db is None:
+            logger.warning("Banco de dados não disponível, retornando lista vazia")
+            return []
+        
+        with Session(self.db) as session:
+            from sqlalchemy import func
+            statement = select(Safra.cultura, func.count(Safra.id).label("quantidade")).group_by(Safra.cultura).order_by(func.count(Safra.id).desc())
+            result = session.exec(statement).all()
+            return [{"cultura": row.cultura, "quantidade": row.quantidade} for row in result]
+
+    def get_estatisticas_areas(self) -> dict:
+        """Retorna estatísticas de áreas das fazendas (total, agricultável e vegetação)"""
+        if self.db is None:
+            logger.warning("Banco de dados não disponível")
+            return {"area_total": 0, "area_agricultavel": 0, "area_vegetacao": 0}
+        
+        with Session(self.db) as session:
+            from sqlalchemy import func
+            # Calcular soma das áreas totais e agricultáveis
+            result = session.exec(
+                select(
+                    func.sum(Fazenda.areatotalfazenda).label("area_total"),
+                    func.sum(Fazenda.areaagricutavel).label("area_agricultavel")
+                )
+            ).first()
+            
+            area_total = result.area_total or 0
+            area_agricultavel = result.area_agricultavel or 0
+            area_vegetacao = area_total - area_agricultavel
+            
+            return {
+                "area_total": area_total,
+                "area_agricultavel": area_agricultavel,
+                "area_vegetacao": area_vegetacao
+            }
+
 
  

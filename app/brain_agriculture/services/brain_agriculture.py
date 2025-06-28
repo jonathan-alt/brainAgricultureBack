@@ -13,6 +13,14 @@ from app.brain_agriculture.schemas.brain_agriculture import (
     Fazenda,
     Safra,
     ReturnSucess,
+    EstatisticasFazendas,
+    FazendaPorEstado,
+    EstatisticasCulturas,
+    CulturaQuantidade,
+    EstatisticasAreas,
+    ResumoFazendas,
+    FazendaResumida,
+    ProdutorResumido,
 )
 from app.brain_agriculture.models.brain_agriculture import Produtor as ProdutorModel, Fazenda as FazendaModel, Safra as SafraModel
 
@@ -217,7 +225,7 @@ class Brain_AgricultureService(BaseService):
                 cidade=fazenda_data.cidade,
                 estado=fazenda_data.estado,
                 areatotalfazenda=fazenda_data.areatotalfazenda,
-                areaagricutav=fazenda_data.areaagricutav,
+                areaagricutavel=fazenda_data.areaagricutavel,
                 idprodutor=fazenda_data.idprodutor
             )
             
@@ -464,5 +472,90 @@ class Brain_AgricultureService(BaseService):
                 message=f"Erro ao excluir safra: {str(e)}",
                 data={}
             )
+
+    async def get_estatisticas_fazendas(self) -> EstatisticasFazendas:
+        """Busca estatísticas de fazendas por estado e total"""
+        try:
+            # Buscar fazendas por estado
+            fazendas_por_estado_data = self.brain_agriculture_repository.get_fazendas_por_estado()
+            
+            # Buscar total de fazendas
+            total_fazendas = self.brain_agriculture_repository.get_total_fazendas()
+            
+            # Converter para schemas
+            fazendas_por_estado = [
+                FazendaPorEstado(estado=item["estado"], quantidade=item["quantidade"])
+                for item in fazendas_por_estado_data
+            ]
+            
+            return EstatisticasFazendas(
+                total_fazendas=total_fazendas,
+                fazendas_por_estado=fazendas_por_estado
+            )
+        except Exception as e:
+            logger.error(f"Erro ao buscar estatísticas de fazendas: {e}")
+            raise e
+
+    async def get_estatisticas_culturas(self) -> EstatisticasCulturas:
+        """Busca estatísticas de culturas plantadas (total e por cultura)"""
+        try:
+            total_culturas = self.brain_agriculture_repository.get_total_culturas()
+            culturas_agrupadas = self.brain_agriculture_repository.get_culturas_agrupadas()
+            culturas = [CulturaQuantidade(**item) for item in culturas_agrupadas]
+            return EstatisticasCulturas(
+                total_culturas=total_culturas,
+                culturas=culturas
+            )
+        except Exception as e:
+            logger.error(f"Erro ao buscar estatísticas de culturas: {e}")
+            raise e
+
+    async def get_estatisticas_areas(self) -> EstatisticasAreas:
+        """Busca estatísticas de áreas das fazendas (total, agricultável e vegetação)"""
+        try:
+            areas_data = self.brain_agriculture_repository.get_estatisticas_areas()
+            return EstatisticasAreas(**areas_data)
+        except Exception as e:
+            logger.error(f"Erro ao buscar estatísticas de áreas: {e}")
+            raise e
+
+    async def get_resumo_fazendas(self) -> ResumoFazendas:
+        """Busca resumo simplificado: total de fazendas e área total cadastrada"""
+        try:
+            total_fazendas = self.brain_agriculture_repository.get_total_fazendas()
+            areas_data = self.brain_agriculture_repository.get_estatisticas_areas()
+            total_area = areas_data["area_total"]
+            
+            return ResumoFazendas(
+                total_fazendas=total_fazendas,
+                total_area=total_area
+            )
+        except Exception as e:
+            logger.error(f"Erro ao buscar resumo de fazendas: {e}")
+            raise e
+
+    async def get_fazendas_resumidas(self) -> List[FazendaResumida]:
+        """Busca lista resumida de fazendas (ID e nome)"""
+        try:
+            fazendas = self.brain_agriculture_repository.get_all_fazendas()
+            return [
+                FazendaResumida(id=fazenda.id, nomefazenda=fazenda.nomefazenda)
+                for fazenda in fazendas
+            ]
+        except Exception as e:
+            logger.error(f"Erro ao buscar fazendas resumidas: {e}")
+            raise e
+
+    async def get_produtores_resumidos(self) -> List[ProdutorResumido]:
+        """Busca lista resumida de produtores (ID e nome)"""
+        try:
+            produtores = self.brain_agriculture_repository.get_all_produtores()
+            return [
+                ProdutorResumido(id=produtor.id, nomeprodutor=produtor.nomeprodutor)
+                for produtor in produtores
+            ]
+        except Exception as e:
+            logger.error(f"Erro ao buscar produtores resumidos: {e}")
+            raise e
 
     

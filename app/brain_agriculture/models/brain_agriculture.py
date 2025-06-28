@@ -14,7 +14,7 @@ class Fazenda(SQLModel, table=True):
     cidade: str = Field(description="Cidade da fazenda", max_length=100)
     estado: str = Field(description="Estado da fazenda", max_length=100)
     areatotalfazenda: float = Field(description="Área total da fazenda em hectare")
-    areaagricutav: float = Field(description="Área agricultável em hectare")
+    areaagricutavel: float = Field(description="Área agricultável em hectare")
     idprodutor: int = Field(foreign_key="produtor.id", description="ID do produtor (chave estrangeira)")
 
 

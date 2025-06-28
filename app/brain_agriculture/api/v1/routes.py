@@ -7,7 +7,11 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 
 from app.core.container import Container
 
-from app.brain_agriculture.schemas.brain_agriculture import Brain_Agriculture, DadosFazenda, Produtor, Fazenda, Safra, ReturnSucess
+from app.brain_agriculture.schemas.brain_agriculture import Brain_Agriculture, DadosFazenda, Produtor, Fazenda, Safra, ReturnSucess, EstatisticasFazendas
+from app.brain_agriculture.schemas.brain_agriculture import EstatisticasCulturas
+from app.brain_agriculture.schemas.brain_agriculture import EstatisticasAreas
+from app.brain_agriculture.schemas.brain_agriculture import ResumoFazendas
+from app.brain_agriculture.schemas.brain_agriculture import FazendaResumida, ProdutorResumido
 from app.brain_agriculture.services.brain_agriculture import Brain_AgricultureService
 
 logger = logging.getLogger(__name__)
@@ -216,8 +220,8 @@ async def update_fazenda(
             update_data['estado'] = fazenda_data.estado
         if fazenda_data.areatotalfazenda is not None:
             update_data['areatotalfazenda'] = fazenda_data.areatotalfazenda
-        if fazenda_data.areaagricutav is not None:
-            update_data['areaagricutav'] = fazenda_data.areaagricutav
+        if fazenda_data.areaagricutavel is not None:
+            update_data['areaagricutavel'] = fazenda_data.areaagricutavel
         if fazenda_data.idprodutor is not None:
             update_data['idprodutor'] = fazenda_data.idprodutor
         
@@ -248,6 +252,20 @@ async def delete_fazenda(
         raise
     except Exception as e:
         logger.error(f"Erro ao excluir fazenda {fazenda_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@r.get("/fazendas/estatisticas", response_model=EstatisticasFazendas)
+@inject
+async def get_estatisticas_fazendas(
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """Retorna estatísticas de fazendas por estado e total"""
+    try:
+        estatisticas = await brain_agriculture_service.get_estatisticas_fazendas()
+        return estatisticas
+    except Exception as e:
+        logger.error(f"Erro ao buscar estatísticas de fazendas: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
@@ -379,6 +397,76 @@ async def delete_safra(
         raise
     except Exception as e:
         logger.error(f"Erro ao excluir safra {safra_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@r.get("/safras/estatisticas-culturas", response_model=EstatisticasCulturas)
+@inject
+async def get_estatisticas_culturas(
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """Retorna estatísticas de culturas plantadas (total e por cultura)"""
+    try:
+        estatisticas = await brain_agriculture_service.get_estatisticas_culturas()
+        return estatisticas
+    except Exception as e:
+        logger.error(f"Erro ao buscar estatísticas de culturas: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@r.get("/fazendas/estatisticas-areas", response_model=EstatisticasAreas)
+@inject
+async def get_estatisticas_areas(
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """Retorna estatísticas de áreas das fazendas (total, agricultável e vegetação)"""
+    try:
+        estatisticas = await brain_agriculture_service.get_estatisticas_areas()
+        return estatisticas
+    except Exception as e:
+        logger.error(f"Erro ao buscar estatísticas de áreas: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@r.get("/fazendas/resumo", response_model=ResumoFazendas)
+@inject
+async def get_resumo_fazendas(
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """Retorna resumo simplificado: total de fazendas e área total cadastrada"""
+    try:
+        resumo = await brain_agriculture_service.get_resumo_fazendas()
+        return resumo
+    except Exception as e:
+        logger.error(f"Erro ao buscar resumo de fazendas: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@r.get("/fazendas/lista", response_model=List[FazendaResumida])
+@inject
+async def get_lista_fazendas(
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """Retorna lista resumida de fazendas (ID e nome)"""
+    try:
+        fazendas = await brain_agriculture_service.get_fazendas_resumidas()
+        return fazendas
+    except Exception as e:
+        logger.error(f"Erro ao buscar lista de fazendas: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@r.get("/produtores/lista", response_model=List[ProdutorResumido])
+@inject
+async def get_lista_produtores(
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """Retorna lista resumida de produtores (ID e nome)"""
+    try:
+        produtores = await brain_agriculture_service.get_produtores_resumidos()
+        return produtores
+    except Exception as e:
+        logger.error(f"Erro ao buscar lista de produtores: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 

@@ -1,6 +1,11 @@
+import os
+import sys
 import logging
 import asyncpg
 from app.core.config import config
+
+# Adicionar o diretório raiz ao PYTHONPATH
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logger = logging.getLogger(__name__)
 

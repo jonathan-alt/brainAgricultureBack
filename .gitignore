@@ -16,3 +16,5 @@ venv/
 .egg-info/
 .idea/
 .vscode/
+scripts/clear_data.py
+scripts/seed_data.py
