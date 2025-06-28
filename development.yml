@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - USER=seu_usuario
+      - HOST=seu_host_do_banco
+      - PASSWORD=sua_senha
+      - DATABASE=seu_nome_do_banco
+      - ENVIRONMENT=development
+    volumes:
+      - .:/app
+    command: ["./entrypoint.sh"]
