@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch
 from app.brain_agriculture.services.brain_agriculture import Brain_AgricultureService
-from app.brain_agriculture.schemas.brain_agriculture import Produtor, Fazenda, Safra, ReturnSucess, ProdutorCreate
+from app.brain_agriculture.schemas.brain_agriculture import Produtor, Fazenda, Safra, ReturnSucess, ProdutorCreate, FazendaCreate, DadosCompletosCreate, VincularFazendaProdutor, VincularProdutorFazenda
 
 
 class TestBrainAgricultureService:
@@ -202,4 +202,196 @@ class TestBrainAgricultureService:
         
         assert len(result) == 1
         assert result[0].id == sample_produtor.id
-        assert result[0].nomeprodutor == sample_produtor.nomeprodutor 
+        assert result[0].cpf == sample_produtor.cpf
+        assert result[0].nomeprodutor == sample_produtor.nomeprodutor
+
+    @pytest.mark.asyncio
+    async def test_get_produtor_completo_success(self, service, mock_repository_methods, sample_produtor, sample_fazenda, sample_safra):
+        """Testa busca de produtor completo com fazendas e safras"""
+        # Mock do produtor
+        mock_repository_methods.get_produtor_by_id.return_value = sample_produtor
+        
+        # Mock das fazendas do produtor
+        mock_repository_methods.get_fazendas_by_produtor.return_value = [sample_fazenda]
+        
+        # Mock das safras da fazenda
+        mock_repository_methods.get_safras_by_fazenda.return_value = [sample_safra]
+        
+        result = await service.get_produtor_completo(1)
+        
+        assert result is not None
+        assert result.id == sample_produtor.id
+        assert result.nomeprodutor == sample_produtor.nomeprodutor
+        assert len(result.fazendas) == 1
+        assert result.fazendas[0].id == sample_fazenda.id
+        assert len(result.fazendas[0].safras) == 1
+        assert result.fazendas[0].safras[0].id == sample_safra.id
+
+    @pytest.mark.asyncio
+    async def test_get_produtor_completo_not_found(self, service, mock_repository_methods):
+        """Testa busca de produtor completo quando não encontrado"""
+        mock_repository_methods.get_produtor_by_id.return_value = None
+        
+        result = await service.get_produtor_completo(999)
+        
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_fazenda_completa_success(self, service, mock_repository_methods, sample_fazenda, sample_safra):
+        """Testa busca de fazenda completa com safras"""
+        # Mock da fazenda
+        mock_repository_methods.get_fazenda_by_id.return_value = sample_fazenda
+        
+        # Mock das safras da fazenda
+        mock_repository_methods.get_safras_by_fazenda.return_value = [sample_safra]
+        
+        result = await service.get_fazenda_completa(1)
+        
+        assert result is not None
+        assert result.id == sample_fazenda.id
+        assert result.nomefazenda == sample_fazenda.nomefazenda
+        assert len(result.safras) == 1
+        assert result.safras[0].id == sample_safra.id
+
+    @pytest.mark.asyncio
+    async def test_get_fazenda_completa_not_found(self, service, mock_repository_methods):
+        """Testa busca de fazenda completa quando não encontrada"""
+        mock_repository_methods.get_fazenda_by_id.return_value = None
+        
+        result = await service.get_fazenda_completa(999)
+        
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_create_fazenda_without_produtor_id(self, service, mock_repository_methods):
+        """Testa criação de fazenda sem fornecer idprodutor"""
+        fazenda_data = FazendaCreate(
+            nomefazenda="Fazenda Teste",
+            cidade="São Paulo",
+            estado="SP",
+            areatotalfazenda=100.0,
+            areaagricutavel=80.0,
+            idprodutor=None
+        )
+        
+        result = await service.create_fazenda(fazenda_data)
+        
+        assert result.success is False
+        assert "ID do produtor é obrigatório" in result.message
+
+    @pytest.mark.asyncio
+    async def test_processar_dados_completos_fazenda_sem_produtor(self, service, mock_repository_methods):
+        """Testa processamento de dados completos com fazenda sem produtor nem idprodutor"""
+        dados = DadosCompletosCreate(
+            produtor=None,
+            fazenda=FazendaCreate(
+                nomefazenda="Fazenda Teste",
+                cidade="São Paulo",
+                estado="SP",
+                areatotalfazenda=100.0,
+                areaagricutavel=80.0,
+                idprodutor=None
+            ),
+            safra=None
+        )
+        
+        result = await service.processar_dados_completos(dados)
+        
+        assert result.success is False
+        assert "É necessário fornecer um produtor ou o ID do produtor na fazenda" in result.message
+
+    @pytest.mark.asyncio
+    async def test_vincular_fazenda_produtor_success(self, service, mock_repository_methods, sample_fazenda, sample_produtor):
+        """Testa vinculação de fazenda a produtor com sucesso"""
+        # Mock da fazenda
+        mock_repository_methods.get_fazenda_by_id.return_value = sample_fazenda
+        
+        # Mock do produtor
+        mock_repository_methods.get_produtor_by_id.return_value = sample_produtor
+        
+        # Mock da atualização da fazenda
+        updated_fazenda = sample_fazenda
+        updated_fazenda.idprodutor = sample_produtor.id
+        mock_repository_methods.update_fazenda.return_value = updated_fazenda
+        
+        dados = VincularFazendaProdutor(fazenda_id=1, produtor_id=2)
+        
+        result = await service.vincular_fazenda_produtor(dados)
+        
+        assert result.success is True
+        assert "vinculada com sucesso" in result.message
+        assert result.data["fazenda_id"] == sample_fazenda.id
+        assert result.data["produtor_id"] == sample_produtor.id
+
+    @pytest.mark.asyncio
+    async def test_vincular_fazenda_produtor_fazenda_not_found(self, service, mock_repository_methods):
+        """Testa vinculação de fazenda a produtor quando fazenda não encontrada"""
+        mock_repository_methods.get_fazenda_by_id.return_value = None
+        
+        dados = VincularFazendaProdutor(fazenda_id=999, produtor_id=1)
+        
+        result = await service.vincular_fazenda_produtor(dados)
+        
+        assert result.success is False
+        assert "Fazenda com ID 999 não encontrada" in result.message
+
+    @pytest.mark.asyncio
+    async def test_vincular_fazenda_produtor_produtor_not_found(self, service, mock_repository_methods, sample_fazenda):
+        """Testa vinculação de fazenda a produtor quando produtor não encontrado"""
+        mock_repository_methods.get_fazenda_by_id.return_value = sample_fazenda
+        mock_repository_methods.get_produtor_by_id.return_value = None
+        
+        dados = VincularFazendaProdutor(fazenda_id=1, produtor_id=999)
+        
+        result = await service.vincular_fazenda_produtor(dados)
+        
+        assert result.success is False
+        assert "Produtor com ID 999 não encontrado" in result.message
+
+    @pytest.mark.asyncio
+    async def test_vincular_produtor_fazenda_success(self, service, mock_repository_methods, sample_produtor, sample_fazenda):
+        """Testa vinculação de produtor a fazenda com sucesso"""
+        # Mock do produtor
+        mock_repository_methods.get_produtor_by_id.return_value = sample_produtor
+        
+        # Mock da fazenda
+        mock_repository_methods.get_fazenda_by_id.return_value = sample_fazenda
+        
+        # Mock da atualização da fazenda
+        updated_fazenda = sample_fazenda
+        updated_fazenda.idprodutor = sample_produtor.id
+        mock_repository_methods.update_fazenda.return_value = updated_fazenda
+        
+        dados = VincularProdutorFazenda(produtor_id=2, fazenda_id=1)
+        
+        result = await service.vincular_produtor_fazenda(dados)
+        
+        assert result.success is True
+        assert "vinculado com sucesso" in result.message
+        assert result.data["produtor_id"] == sample_produtor.id
+        assert result.data["fazenda_id"] == sample_fazenda.id
+
+    @pytest.mark.asyncio
+    async def test_vincular_produtor_fazenda_produtor_not_found(self, service, mock_repository_methods):
+        """Testa vinculação de produtor a fazenda quando produtor não encontrado"""
+        mock_repository_methods.get_produtor_by_id.return_value = None
+        
+        dados = VincularProdutorFazenda(produtor_id=999, fazenda_id=1)
+        
+        result = await service.vincular_produtor_fazenda(dados)
+        
+        assert result.success is False
+        assert "Produtor com ID 999 não encontrado" in result.message
+
+    @pytest.mark.asyncio
+    async def test_vincular_produtor_fazenda_fazenda_not_found(self, service, mock_repository_methods, sample_produtor):
+        """Testa vinculação de produtor a fazenda quando fazenda não encontrada"""
+        mock_repository_methods.get_produtor_by_id.return_value = sample_produtor
+        mock_repository_methods.get_fazenda_by_id.return_value = None
+        
+        dados = VincularProdutorFazenda(produtor_id=1, fazenda_id=999)
+        
+        result = await service.vincular_produtor_fazenda(dados)
+        
+        assert result.success is False
+        assert "Fazenda com ID 999 não encontrada" in result.message 

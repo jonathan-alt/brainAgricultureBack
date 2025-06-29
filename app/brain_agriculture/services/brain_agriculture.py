@@ -24,6 +24,13 @@ from app.brain_agriculture.schemas.brain_agriculture import (
     ProdutorCreate,
     FazendaCreate,
     SafraCreate,
+    DadosCompletosCreate,
+    DadosCompletosResponse,
+    ProdutorCompleto,
+    FazendaCompleta,
+    FazendaComSafras,
+    VincularFazendaProdutor,
+    VincularProdutorFazenda,
 )
 from app.brain_agriculture.models.brain_agriculture import Produtor as ProdutorModel, Fazenda as FazendaModel, Safra as SafraModel
 
@@ -213,12 +220,20 @@ class Brain_AgricultureService(BaseService):
     async def create_fazenda(self, fazenda_data: FazendaCreate) -> ReturnSucess:
         """Cria uma nova fazenda"""
         try:
-            # Verificar se o produtor existe
-            produtor = self.brain_agriculture_repository.get_produtor_by_id(fazenda_data.idprodutor)
-            if not produtor:
+            # Verificar se o produtor existe (se idprodutor foi fornecido)
+            if fazenda_data.idprodutor is not None:
+                produtor = self.brain_agriculture_repository.get_produtor_by_id(fazenda_data.idprodutor)
+                if not produtor:
+                    return ReturnSucess(
+                        success=False,
+                        message="Produtor não encontrado",
+                        data={}
+                    )
+                produtor_id = fazenda_data.idprodutor
+            else:
                 return ReturnSucess(
                     success=False,
-                    message="Produtor não encontrado",
+                    message="ID do produtor é obrigatório para criar uma fazenda",
                     data={}
                 )
             
@@ -229,7 +244,7 @@ class Brain_AgricultureService(BaseService):
                 estado=fazenda_data.estado,
                 areatotalfazenda=fazenda_data.areatotalfazenda,
                 areaagricutavel=fazenda_data.areaagricutavel,
-                idprodutor=fazenda_data.idprodutor
+                idprodutor=produtor_id
             )
             
             created_fazenda = self.brain_agriculture_repository.create_fazenda(fazenda_model)
@@ -260,7 +275,7 @@ class Brain_AgricultureService(BaseService):
                 )
             
             # Se estiver atualizando o produtor, verificar se existe
-            if 'idprodutor' in fazenda_data:
+            if 'idprodutor' in fazenda_data and fazenda_data['idprodutor'] is not None:
                 produtor = self.brain_agriculture_repository.get_produtor_by_id(fazenda_data['idprodutor'])
                 if not produtor:
                     return ReturnSucess(
@@ -550,15 +565,312 @@ class Brain_AgricultureService(BaseService):
             raise e
 
     async def get_produtores_resumidos(self) -> List[ProdutorResumido]:
-        """Busca lista resumida de produtores (ID e nome)"""
+        """Busca lista resumida de produtores (ID, CPF e nome)"""
         try:
             produtores = self.brain_agriculture_repository.get_all_produtores()
             return [
-                ProdutorResumido(id=produtor.id, nomeprodutor=produtor.nomeprodutor)
+                ProdutorResumido(id=produtor.id, cpf=produtor.cpf, nomeprodutor=produtor.nomeprodutor)
                 for produtor in produtores
             ]
         except Exception as e:
             logger.error(f"Erro ao buscar produtores resumidos: {e}")
             raise e
+
+    async def processar_dados_completos(self, dados: DadosCompletosCreate) -> DadosCompletosResponse:
+        """Processa dados completos de produtor, fazenda e safra de forma hierárquica"""
+        try:
+            # A validação já é feita automaticamente pelo Pydantic
+            produtor_id = None
+            fazenda_id = None
+            safra_id = None
+            
+            # 1. Salvar produtor primeiro (se fornecido)
+            if dados.produtor:
+                logger.info("Processando dados do produtor")
+                
+                # Verificar se já existe um produtor com o mesmo CPF
+                existing_produtor = self.brain_agriculture_repository.get_produtor_by_cpf(dados.produtor.cpf)
+                if existing_produtor:
+                    produtor_id = existing_produtor.id
+                    logger.info(f"Produtor já existe com ID: {produtor_id}")
+                else:
+                    # Criar novo produtor
+                    produtor_model = ProdutorModel(
+                        cpf=dados.produtor.cpf,
+                        nomeprodutor=dados.produtor.nomeprodutor
+                    )
+                    created_produtor = self.brain_agriculture_repository.create_produtor(produtor_model)
+                    produtor_id = created_produtor.id
+                    logger.info(f"Produtor criado com ID: {produtor_id}")
+            
+            # 2. Salvar fazenda (se fornecida)
+            if dados.fazenda:
+                logger.info("Processando dados da fazenda")
+                
+                # Se não temos produtor_id ainda, usar o idprodutor fornecido
+                if produtor_id is None:
+                    if dados.fazenda.idprodutor is None:
+                        return DadosCompletosResponse(
+                            success=False,
+                            message="É necessário fornecer um produtor ou o ID do produtor na fazenda",
+                            data={}
+                        )
+                    produtor_id = dados.fazenda.idprodutor
+                    # Verificar se o produtor existe
+                    produtor = self.brain_agriculture_repository.get_produtor_by_id(produtor_id)
+                    if not produtor:
+                        return DadosCompletosResponse(
+                            success=False,
+                            message=f"Produtor com ID {produtor_id} não encontrado",
+                            data={}
+                        )
+                else:
+                    # Usar o produtor_id que acabamos de criar/obter
+                    produtor_id = produtor_id
+                
+                # Criar fazenda
+                fazenda_model = FazendaModel(
+                    nomefazenda=dados.fazenda.nomefazenda,
+                    cidade=dados.fazenda.cidade,
+                    estado=dados.fazenda.estado,
+                    areatotalfazenda=dados.fazenda.areatotalfazenda,
+                    areaagricutavel=dados.fazenda.areaagricutavel,
+                    idprodutor=produtor_id
+                )
+                created_fazenda = self.brain_agriculture_repository.create_fazenda(fazenda_model)
+                fazenda_id = created_fazenda.id
+                logger.info(f"Fazenda criada com ID: {fazenda_id}")
+            
+            # 3. Salvar safra (se fornecida)
+            if dados.safra:
+                logger.info("Processando dados da safra")
+                
+                # Se não temos fazenda_id ainda, usar o idfazenda fornecido
+                if fazenda_id is None:
+                    fazenda_id = dados.safra.idfazenda
+                    # Verificar se a fazenda existe
+                    fazenda = self.brain_agriculture_repository.get_fazenda_by_id(fazenda_id)
+                    if not fazenda:
+                        return DadosCompletosResponse(
+                            success=False,
+                            message=f"Fazenda com ID {fazenda_id} não encontrada",
+                            data={}
+                        )
+                else:
+                    # Usar o fazenda_id que acabamos de criar
+                    fazenda_id = fazenda_id
+                
+                # Criar safra
+                safra_model = SafraModel(
+                    ano=dados.safra.ano,
+                    cultura=dados.safra.cultura,
+                    idfazenda=fazenda_id
+                )
+                created_safra = self.brain_agriculture_repository.create_safra(safra_model)
+                safra_id = created_safra.id
+                logger.info(f"Safra criada com ID: {safra_id}")
+            
+            # Preparar resposta
+            response_data = {}
+            if produtor_id:
+                response_data["produtor_id"] = produtor_id
+            if fazenda_id:
+                response_data["fazenda_id"] = fazenda_id
+            if safra_id:
+                response_data["safra_id"] = safra_id
+            
+            return DadosCompletosResponse(
+                success=True,
+                message="Dados processados e salvos com sucesso",
+                data=response_data
+            )
+            
+        except Exception as e:
+            logger.error(f"Erro ao processar dados completos: {e}")
+            return DadosCompletosResponse(
+                success=False,
+                message=f"Erro interno ao processar dados: {str(e)}",
+                data={}
+            )
+
+    async def get_produtor_completo(self, produtor_id: int) -> Optional[ProdutorCompleto]:
+        """Busca um produtor completo com suas fazendas e safras"""
+        try:
+            # Buscar o produtor
+            produtor = self.brain_agriculture_repository.get_produtor_by_id(produtor_id)
+            if not produtor:
+                return None
+            
+            # Buscar fazendas do produtor
+            fazendas = self.brain_agriculture_repository.get_fazendas_by_produtor(produtor_id)
+            
+            # Para cada fazenda, buscar suas safras
+            fazendas_com_safras = []
+            for fazenda in fazendas:
+                safras = self.brain_agriculture_repository.get_safras_by_fazenda(fazenda.id)
+                
+                # Converter safras para schema
+                safras_schema = [Safra.from_orm(safra) for safra in safras]
+                
+                # Criar fazenda com safras
+                fazenda_com_safras = FazendaComSafras(
+                    id=fazenda.id,
+                    nomefazenda=fazenda.nomefazenda,
+                    cidade=fazenda.cidade,
+                    estado=fazenda.estado,
+                    areatotalfazenda=fazenda.areatotalfazenda,
+                    areaagricutavel=fazenda.areaagricutavel,
+                    idprodutor=fazenda.idprodutor,
+                    safras=safras_schema
+                )
+                fazendas_com_safras.append(fazenda_com_safras)
+            
+            # Criar produtor completo
+            produtor_completo = ProdutorCompleto(
+                id=produtor.id,
+                cpf=produtor.cpf,
+                nomeprodutor=produtor.nomeprodutor,
+                fazendas=fazendas_com_safras
+            )
+            
+            return produtor_completo
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar produtor completo {produtor_id}: {e}")
+            raise e
+
+    async def get_fazenda_completa(self, fazenda_id: int) -> Optional[FazendaCompleta]:
+        """Busca uma fazenda completa com suas safras"""
+        try:
+            # Buscar a fazenda
+            fazenda = self.brain_agriculture_repository.get_fazenda_by_id(fazenda_id)
+            if not fazenda:
+                return None
+            
+            # Buscar safras da fazenda
+            safras = self.brain_agriculture_repository.get_safras_by_fazenda(fazenda_id)
+            
+            # Converter safras para schema
+            safras_schema = [Safra.from_orm(safra) for safra in safras]
+            
+            # Criar fazenda completa
+            fazenda_completa = FazendaCompleta(
+                id=fazenda.id,
+                nomefazenda=fazenda.nomefazenda,
+                cidade=fazenda.cidade,
+                estado=fazenda.estado,
+                areatotalfazenda=fazenda.areatotalfazenda,
+                areaagricutavel=fazenda.areaagricutavel,
+                idprodutor=fazenda.idprodutor,
+                safras=safras_schema
+            )
+            
+            return fazenda_completa
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar fazenda completa {fazenda_id}: {e}")
+            raise e
+
+    async def vincular_fazenda_produtor(self, dados: VincularFazendaProdutor) -> ReturnSucess:
+        """Vincula uma fazenda a um produtor"""
+        try:
+            # Verificar se a fazenda existe
+            fazenda = self.brain_agriculture_repository.get_fazenda_by_id(dados.fazenda_id)
+            if not fazenda:
+                return ReturnSucess(
+                    success=False,
+                    message=f"Fazenda com ID {dados.fazenda_id} não encontrada",
+                    data={}
+                )
+            
+            # Verificar se o produtor existe
+            produtor = self.brain_agriculture_repository.get_produtor_by_id(dados.produtor_id)
+            if not produtor:
+                return ReturnSucess(
+                    success=False,
+                    message=f"Produtor com ID {dados.produtor_id} não encontrado",
+                    data={}
+                )
+            
+            # Atualizar a fazenda com o novo produtor
+            update_data = {"idprodutor": dados.produtor_id}
+            updated_fazenda = self.brain_agriculture_repository.update_fazenda(dados.fazenda_id, update_data)
+            
+            if updated_fazenda:
+                return ReturnSucess(
+                    success=True,
+                    message=f"Fazenda '{updated_fazenda.nomefazenda}' vinculada com sucesso ao produtor '{produtor.nomeprodutor}'",
+                    data={
+                        "fazenda_id": updated_fazenda.id,
+                        "fazenda_nome": updated_fazenda.nomefazenda,
+                        "produtor_id": produtor.id,
+                        "produtor_nome": produtor.nomeprodutor
+                    }
+                )
+            else:
+                return ReturnSucess(
+                    success=False,
+                    message="Erro ao vincular fazenda ao produtor",
+                    data={}
+                )
+                
+        except Exception as e:
+            logger.error(f"Erro ao vincular fazenda {dados.fazenda_id} ao produtor {dados.produtor_id}: {e}")
+            return ReturnSucess(
+                success=False,
+                message=f"Erro interno ao vincular fazenda ao produtor: {str(e)}",
+                data={}
+            )
+
+    async def vincular_produtor_fazenda(self, dados: VincularProdutorFazenda) -> ReturnSucess:
+        """Vincula um produtor a uma fazenda (mesma funcionalidade da anterior, mas com ordem diferente)"""
+        try:
+            # Verificar se o produtor existe
+            produtor = self.brain_agriculture_repository.get_produtor_by_id(dados.produtor_id)
+            if not produtor:
+                return ReturnSucess(
+                    success=False,
+                    message=f"Produtor com ID {dados.produtor_id} não encontrado",
+                    data={}
+                )
+            
+            # Verificar se a fazenda existe
+            fazenda = self.brain_agriculture_repository.get_fazenda_by_id(dados.fazenda_id)
+            if not fazenda:
+                return ReturnSucess(
+                    success=False,
+                    message=f"Fazenda com ID {dados.fazenda_id} não encontrada",
+                    data={}
+                )
+            
+            # Atualizar a fazenda com o novo produtor
+            update_data = {"idprodutor": dados.produtor_id}
+            updated_fazenda = self.brain_agriculture_repository.update_fazenda(dados.fazenda_id, update_data)
+            
+            if updated_fazenda:
+                return ReturnSucess(
+                    success=True,
+                    message=f"Produtor '{produtor.nomeprodutor}' vinculado com sucesso à fazenda '{updated_fazenda.nomefazenda}'",
+                    data={
+                        "produtor_id": produtor.id,
+                        "produtor_nome": produtor.nomeprodutor,
+                        "fazenda_id": updated_fazenda.id,
+                        "fazenda_nome": updated_fazenda.nomefazenda
+                    }
+                )
+            else:
+                return ReturnSucess(
+                    success=False,
+                    message="Erro ao vincular produtor à fazenda",
+                    data={}
+                )
+                
+        except Exception as e:
+            logger.error(f"Erro ao vincular produtor {dados.produtor_id} à fazenda {dados.fazenda_id}: {e}")
+            return ReturnSucess(
+                success=False,
+                message=f"Erro interno ao vincular produtor à fazenda: {str(e)}",
+                data={}
+            )
 
     

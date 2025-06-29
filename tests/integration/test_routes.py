@@ -5,7 +5,7 @@ from unittest.mock import Mock, AsyncMock
 from app.main import app
 from app.core.container import Container
 from app.brain_agriculture.models.brain_agriculture import Produtor, Fazenda, Safra
-from app.brain_agriculture.schemas.brain_agriculture import ReturnSucess, EstatisticasFazendas, FazendaPorEstado, EstatisticasCulturas, CulturaQuantidade, EstatisticasAreas, ResumoFazendas, FazendaResumida, ProdutorResumido
+from app.brain_agriculture.schemas.brain_agriculture import ReturnSucess, EstatisticasFazendas, FazendaPorEstado, EstatisticasCulturas, CulturaQuantidade, EstatisticasAreas, ResumoFazendas, FazendaResumida, ProdutorResumido, ProdutorCompleto, FazendaComSafras, FazendaCompleta, VincularFazendaProdutor, VincularProdutorFazenda
 import app.brain_agriculture.api.v1.routes as routes_module
 
 @pytest.fixture
@@ -33,6 +33,10 @@ def mock_service():
     mock_service.get_fazendas_resumidas = AsyncMock()
     mock_service.get_produtores_resumidos = AsyncMock()
     mock_service.get_teste = AsyncMock()
+    mock_service.get_produtor_completo = AsyncMock()
+    mock_service.get_fazenda_completa = AsyncMock()
+    mock_service.vincular_fazenda_produtor = AsyncMock()
+    mock_service.vincular_produtor_fazenda = AsyncMock()
     return mock_service
 
 class TestBrainAgricultureRoutes:
@@ -198,14 +202,15 @@ class TestBrainAgricultureRoutes:
             container = app.container
             with container.brain_agriculture_service.override(mock_service):
                 mock_service.get_produtores_resumidos.return_value = [
-                    ProdutorResumido(id=1, nomeprodutor="João Silva"),
-                    ProdutorResumido(id=2, nomeprodutor="Maria Santos")
+                    ProdutorResumido(id=1, cpf="123.456.789-00", nomeprodutor="João Silva"),
+                    ProdutorResumido(id=2, cpf="987.654.321-00", nomeprodutor="Maria Santos")
                 ]
                 response = client.get("/api/v1/produtores/lista")
                 assert response.status_code == 200
                 data = response.json()
                 assert len(data) == 2
                 assert data[0]["id"] == 1
+                assert data[0]["cpf"] == "123.456.789-00"
                 assert data[0]["nomeprodutor"] == "João Silva"
 
     def test_internal_server_error(self, mock_service):
@@ -215,4 +220,170 @@ class TestBrainAgricultureRoutes:
                 mock_service.get_all_produtores.side_effect = Exception("Erro interno")
                 response = client.get("/api/v1/produtores")
                 assert response.status_code == 500
-                assert "Erro interno do servidor" in response.json()["detail"] 
+                assert "Erro interno do servidor" in response.json()["detail"]
+
+    def test_get_produtor_completo_success(self, mock_service):
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                from app.brain_agriculture.schemas.brain_agriculture import ProdutorCompleto, FazendaComSafras
+                
+                # Criar dados de teste
+                sample_safra = Safra(id=1, ano=2024, cultura="Soja", idfazenda=1)
+                sample_fazenda_com_safras = FazendaComSafras(
+                    id=1,
+                    nomefazenda="Fazenda São João",
+                    cidade="São Paulo",
+                    estado="SP",
+                    areatotalfazenda=100.5,
+                    areaagricutavel=80.0,
+                    idprodutor=1,
+                    safras=[sample_safra]
+                )
+                sample_produtor_completo = ProdutorCompleto(
+                    id=1,
+                    cpf="123.456.789-00",
+                    nomeprodutor="João Silva",
+                    fazendas=[sample_fazenda_com_safras]
+                )
+                
+                mock_service.get_produtor_completo.return_value = sample_produtor_completo
+                response = client.get("/api/v1/produtores/1/completo")
+                assert response.status_code == 200
+                data = response.json()
+                assert data["id"] == 1
+                assert data["nomeprodutor"] == "João Silva"
+                assert len(data["fazendas"]) == 1
+                assert data["fazendas"][0]["nomefazenda"] == "Fazenda São João"
+                assert len(data["fazendas"][0]["safras"]) == 1
+                assert data["fazendas"][0]["safras"][0]["cultura"] == "Soja"
+
+    def test_get_produtor_completo_not_found(self, mock_service):
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.get_produtor_completo.return_value = None
+                response = client.get("/api/v1/produtores/999/completo")
+                assert response.status_code == 404
+                assert "Produtor não encontrado" in response.json()["detail"]
+
+    def test_get_fazenda_completa_success(self, mock_service):
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                from app.brain_agriculture.schemas.brain_agriculture import FazendaCompleta
+                
+                # Criar dados de teste
+                sample_safra1 = Safra(id=1, ano=2024, cultura="Soja", idfazenda=1)
+                sample_safra2 = Safra(id=2, ano=2024, cultura="Milho", idfazenda=1)
+                sample_fazenda_completa = FazendaCompleta(
+                    id=1,
+                    nomefazenda="Fazenda São João",
+                    cidade="São Paulo",
+                    estado="SP",
+                    areatotalfazenda=100.5,
+                    areaagricutavel=80.0,
+                    idprodutor=1,
+                    safras=[sample_safra1, sample_safra2]
+                )
+                
+                mock_service.get_fazenda_completa.return_value = sample_fazenda_completa
+                response = client.get("/api/v1/fazendas/1/completa")
+                assert response.status_code == 200
+                data = response.json()
+                assert data["id"] == 1
+                assert data["nomefazenda"] == "Fazenda São João"
+                assert len(data["safras"]) == 2
+                assert data["safras"][0]["cultura"] == "Soja"
+                assert data["safras"][1]["cultura"] == "Milho"
+
+    def test_get_fazenda_completa_not_found(self, mock_service):
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.get_fazenda_completa.return_value = None
+                response = client.get("/api/v1/fazendas/999/completa")
+                assert response.status_code == 404
+                assert "Fazenda não encontrada" in response.json()["detail"]
+
+    def test_vincular_fazenda_produtor_success(self, mock_service):
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.vincular_fazenda_produtor.return_value = ReturnSucess(
+                    success=True,
+                    message="Fazenda 'Fazenda São João' vinculada com sucesso ao produtor 'João Silva'",
+                    data={
+                        "fazenda_id": 1,
+                        "fazenda_nome": "Fazenda São João",
+                        "produtor_id": 2,
+                        "produtor_nome": "João Silva"
+                    }
+                )
+                
+                dados = {"fazenda_id": 1, "produtor_id": 2}
+                response = client.post("/api/v1/vincular-fazenda-produtor", json=dados)
+                
+                assert response.status_code == 200
+                data = response.json()
+                assert data["success"] is True
+                assert "vinculada com sucesso" in data["message"]
+                assert data["data"]["fazenda_id"] == 1
+                assert data["data"]["produtor_id"] == 2
+
+    def test_vincular_fazenda_produtor_error(self, mock_service):
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.vincular_fazenda_produtor.return_value = ReturnSucess(
+                    success=False,
+                    message="Fazenda com ID 999 não encontrada",
+                    data={}
+                )
+                
+                dados = {"fazenda_id": 999, "produtor_id": 1}
+                response = client.post("/api/v1/vincular-fazenda-produtor", json=dados)
+                
+                assert response.status_code == 400
+                assert "Fazenda com ID 999 não encontrada" in response.json()["detail"]
+
+    def test_vincular_produtor_fazenda_success(self, mock_service):
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.vincular_produtor_fazenda.return_value = ReturnSucess(
+                    success=True,
+                    message="Produtor 'João Silva' vinculado com sucesso à fazenda 'Fazenda São João'",
+                    data={
+                        "produtor_id": 2,
+                        "produtor_nome": "João Silva",
+                        "fazenda_id": 1,
+                        "fazenda_nome": "Fazenda São João"
+                    }
+                )
+                
+                dados = {"produtor_id": 2, "fazenda_id": 1}
+                response = client.post("/api/v1/vincular-produtor-fazenda", json=dados)
+                
+                assert response.status_code == 200
+                data = response.json()
+                assert data["success"] is True
+                assert "vinculado com sucesso" in data["message"]
+                assert data["data"]["produtor_id"] == 2
+                assert data["data"]["fazenda_id"] == 1
+
+    def test_vincular_produtor_fazenda_error(self, mock_service):
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.vincular_produtor_fazenda.return_value = ReturnSucess(
+                    success=False,
+                    message="Produtor com ID 999 não encontrado",
+                    data={}
+                )
+                
+                dados = {"produtor_id": 999, "fazenda_id": 1}
+                response = client.post("/api/v1/vincular-produtor-fazenda", json=dados)
+                
+                assert response.status_code == 400
+                assert "Produtor com ID 999 não encontrado" in response.json()["detail"] 

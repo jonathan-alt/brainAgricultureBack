@@ -13,6 +13,9 @@ from app.brain_agriculture.schemas.brain_agriculture import EstatisticasAreas
 from app.brain_agriculture.schemas.brain_agriculture import ResumoFazendas
 from app.brain_agriculture.schemas.brain_agriculture import FazendaResumida, ProdutorResumido
 from app.brain_agriculture.schemas.brain_agriculture import ProdutorCreate, FazendaCreate, SafraCreate
+from app.brain_agriculture.schemas.brain_agriculture import DadosCompletosCreate, DadosCompletosResponse
+from app.brain_agriculture.schemas.brain_agriculture import ProdutorCompleto, FazendaCompleta
+from app.brain_agriculture.schemas.brain_agriculture import VincularFazendaProdutor, VincularProdutorFazenda
 from app.brain_agriculture.services.brain_agriculture import Brain_AgricultureService
 
 logger = logging.getLogger(__name__)
@@ -471,6 +474,136 @@ async def delete_safra(
         raise
     except Exception as e:
         logger.error(f"Erro ao excluir safra {safra_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+# Rota para processar dados completos (produtor, fazenda e safra)
+@r.post("/dados-completos", response_model=DadosCompletosResponse)
+@inject
+async def processar_dados_completos(
+    dados: DadosCompletosCreate,
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """
+    Processa dados completos de produtor, fazenda e safra de forma hierárquica.
+    
+    - Nenhum campo é obrigatório
+    - Safra nunca pode vir sozinha (deve vir com produtor e/ou fazenda)
+    - Salva primeiro produtor, depois fazenda (vinculando ao produtor), depois safra (vinculando à fazenda)
+    - Se produtor já existe (mesmo CPF), usa o existente
+    - Retorna os IDs dos registros criados/encontrados
+    """
+    try:
+        result = await brain_agriculture_service.processar_dados_completos(dados)
+        if not result.success:
+            raise HTTPException(status_code=400, detail=result.message)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao processar dados completos: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+# Rota para buscar produtor completo com fazendas e safras
+@r.get("/produtores/{produtor_id}/completo", response_model=ProdutorCompleto)
+@inject
+async def get_produtor_completo(
+    produtor_id: int,
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """
+    Busca um produtor completo com todas as suas fazendas e safras.
+    
+    Retorna:
+    - Dados do produtor
+    - Lista de fazendas do produtor
+    - Para cada fazenda, lista de safras vinculadas
+    """
+    try:
+        produtor_completo = await brain_agriculture_service.get_produtor_completo(produtor_id)
+        if not produtor_completo:
+            raise HTTPException(status_code=404, detail="Produtor não encontrado")
+        return produtor_completo
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao buscar produtor completo {produtor_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+# Rota para buscar fazenda completa com safras
+@r.get("/fazendas/{fazenda_id}/completa", response_model=FazendaCompleta)
+@inject
+async def get_fazenda_completa(
+    fazenda_id: int,
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """
+    Busca uma fazenda completa com todas as suas safras.
+    
+    Retorna:
+    - Dados da fazenda
+    - Lista de safras vinculadas à fazenda
+    """
+    try:
+        fazenda_completa = await brain_agriculture_service.get_fazenda_completa(fazenda_id)
+        if not fazenda_completa:
+            raise HTTPException(status_code=404, detail="Fazenda não encontrada")
+        return fazenda_completa
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao buscar fazenda completa {fazenda_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+# Rota para vincular fazenda a produtor
+@r.post("/vincular-fazenda-produtor", response_model=ReturnSucess)
+@inject
+async def vincular_fazenda_produtor(
+    dados: VincularFazendaProdutor,
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """
+    Vincula uma fazenda a um produtor.
+    
+    Atualiza o campo idprodutor da fazenda para referenciar o produtor especificado.
+    """
+    try:
+        result = await brain_agriculture_service.vincular_fazenda_produtor(dados)
+        if not result.success:
+            raise HTTPException(status_code=400, detail=result.message)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao vincular fazenda {dados.fazenda_id} ao produtor {dados.produtor_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+# Rota para vincular produtor a fazenda
+@r.post("/vincular-produtor-fazenda", response_model=ReturnSucess)
+@inject
+async def vincular_produtor_fazenda(
+    dados: VincularProdutorFazenda,
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """
+    Vincula um produtor a uma fazenda.
+    
+    Atualiza o campo idprodutor da fazenda para referenciar o produtor especificado.
+    (Funcionalidade idêntica à rota anterior, mas com ordem diferente dos parâmetros)
+    """
+    try:
+        result = await brain_agriculture_service.vincular_produtor_fazenda(dados)
+        if not result.success:
+            raise HTTPException(status_code=400, detail=result.message)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao vincular produtor {dados.produtor_id} à fazenda {dados.fazenda_id}: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 

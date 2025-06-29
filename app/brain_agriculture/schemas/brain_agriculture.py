@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, validator
 
 # Schemas para criação (sem ID obrigatório)
 class ProdutorCreate(BaseModel):
@@ -22,7 +22,7 @@ class FazendaCreate(BaseModel):
     estado: str = Field(example="Pernambuco", description="Estado da fazenda")
     areatotalfazenda: float = Field(example=8.5, description="Área total da fazenda em hectare")
     areaagricutavel: float = Field(example=8.5, description="Área agricultável em hectare")
-    idprodutor: int = Field(example=1, description="ID do produtor (chave estrangeira)")
+    idprodutor: Optional[int] = Field(default=None, example=1, description="ID do produtor (chave estrangeira) - opcional")
 
 
 class SafraCreate(BaseModel):
@@ -155,4 +155,88 @@ class ProdutorResumido(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     
     id: int = Field(example=1, description="ID do produtor")
+    cpf: str = Field(example="123.456.789-00", description="CPF do produtor")
     nomeprodutor: str = Field(example="João Silva", description="Nome do produtor")
+
+
+class DadosCompletosCreate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    """Schema para receber dados completos de produtor, fazenda e safra"""
+    produtor: Optional[ProdutorCreate] = Field(default=None, description="Dados do produtor (opcional, mas se enviado todos os campos são obrigatórios)")
+    fazenda: Optional[FazendaCreate] = Field(default=None, description="Dados da fazenda (opcional, mas se enviado todos os campos exceto idprodutor são obrigatórios)")
+    safra: Optional[SafraCreate] = Field(default=None, description="Dados da safra (opcional, mas se enviado todos os campos são obrigatórios)")
+    
+    @validator('safra')
+    def validate_safra_not_alone(cls, v, values):
+        """Valida que safra não vem sozinha"""
+        if v is not None and values.get('produtor') is None and values.get('fazenda') is None:
+            raise ValueError("Safra não pode ser enviada sozinha. É necessário enviar produtor e/ou fazenda.")
+        return v
+
+
+class DadosCompletosResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    """Schema para resposta dos dados completos salvos"""
+    success: bool = Field(example=True, description="Indica se a operação foi bem-sucedida")
+    message: str = Field(example="Dados salvos com sucesso", description="Mensagem de retorno")
+    data: dict = Field(example={
+        "produtor_id": 1,
+        "fazenda_id": 2,
+        "safra_id": 3
+    }, description="IDs dos registros criados")
+
+
+class FazendaComSafras(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    """Schema para fazenda com suas safras"""
+    id: int = Field(example=1, description="ID da fazenda")
+    nomefazenda: str = Field(example="Fazenda Nova", description="Nome da fazenda")
+    cidade: str = Field(example="Recife", description="Cidade da fazenda")
+    estado: str = Field(example="Pernambuco", description="Estado da fazenda")
+    areatotalfazenda: float = Field(example=8.5, description="Área total da fazenda em hectare")
+    areaagricutavel: float = Field(example=8.5, description="Área agricultável em hectare")
+    idprodutor: int = Field(example=1, description="ID do produtor (chave estrangeira)")
+    safras: List[Safra] = Field(default=[], description="Lista de safras da fazenda")
+
+
+class ProdutorCompleto(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    """Schema para produtor com suas fazendas e safras"""
+    id: int = Field(example=1, description="ID do produtor")
+    cpf: str = Field(example="285.487.490-08", description="CPF do produtor")
+    nomeprodutor: str = Field(example="Marcos Fernando de Souza", description="Nome do produtor")
+    fazendas: List[FazendaComSafras] = Field(default=[], description="Lista de fazendas do produtor com suas safras")
+
+
+class FazendaCompleta(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    """Schema para fazenda completa com suas safras"""
+    id: int = Field(example=1, description="ID da fazenda")
+    nomefazenda: str = Field(example="Fazenda Nova", description="Nome da fazenda")
+    cidade: str = Field(example="Recife", description="Cidade da fazenda")
+    estado: str = Field(example="Pernambuco", description="Estado da fazenda")
+    areatotalfazenda: float = Field(example=8.5, description="Área total da fazenda em hectare")
+    areaagricutavel: float = Field(example=8.5, description="Área agricultável em hectare")
+    idprodutor: int = Field(example=1, description="ID do produtor (chave estrangeira)")
+    safras: List[Safra] = Field(default=[], description="Lista de safras da fazenda")
+
+
+class VincularFazendaProdutor(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    """Schema para vincular uma fazenda a um produtor"""
+    fazenda_id: int = Field(example=1, description="ID da fazenda")
+    produtor_id: int = Field(example=1, description="ID do produtor")
+
+
+class VincularProdutorFazenda(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    """Schema para vincular um produtor a uma fazenda"""
+    produtor_id: int = Field(example=1, description="ID do produtor")
+    fazenda_id: int = Field(example=1, description="ID da fazenda")

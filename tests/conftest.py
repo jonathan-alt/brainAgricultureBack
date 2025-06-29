@@ -118,12 +118,15 @@ def mock_repository_methods(brain_agriculture_repository):
     
     brain_agriculture_repository.get_all_fazendas = Mock(return_value=[])
     brain_agriculture_repository.get_fazenda_by_id = Mock(return_value=None)
+    brain_agriculture_repository.get_fazendas_by_produtor = Mock(return_value=[])
     brain_agriculture_repository.create_fazenda = Mock()
     brain_agriculture_repository.update_fazenda = Mock()
     brain_agriculture_repository.delete_fazenda = Mock(return_value=True)
     
     brain_agriculture_repository.get_all_safras = Mock(return_value=[])
     brain_agriculture_repository.get_safra_by_id = Mock(return_value=None)
+    brain_agriculture_repository.get_safras_by_fazenda = Mock(return_value=[])
+    brain_agriculture_repository.get_safras_by_ano = Mock(return_value=[])
     brain_agriculture_repository.create_safra = Mock()
     brain_agriculture_repository.update_safra = Mock()
     brain_agriculture_repository.delete_safra = Mock(return_value=True)
