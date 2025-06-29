@@ -22,4 +22,5 @@ python scripts/setup_db.py
 #python scripts/seed_data.py
 
 exec "$@"
+
 uvicorn app.main:app --host 0.0.0.0 --port $PORT --reload
