@@ -36,6 +36,7 @@ class Config(metaclass=ConfigSingletonMeta):
         self.ENVIRONMENT = vars.get("ENVIRONMENT")
         self.ENCRYPTION_KEY = vars.get("ENCRYPTION_KEY")
         self.AGRICULTURE_QUEUE = f"report_{self.ENVIRONMENT}"
+        self.PORT = int(vars.get("PORT", 8000))
 
 
 class ConfigFromEnviron(Config):

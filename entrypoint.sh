@@ -6,6 +6,9 @@ set -o nounset
 # Configurar PYTHONPATH
 export PYTHONPATH=.
 
+# Obter porta do ambiente ou usar 8000 como padrão
+PORT=${PORT:-8000}
+
 echo "Verificando tabelas existentes no banco de dados..."
 python scripts/check_tables.py
 
@@ -19,4 +22,4 @@ python scripts/setup_db.py
 #python scripts/seed_data.py
 
 exec "$@"
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port $PORT --reload

@@ -26,9 +26,11 @@ docker-compose -f development.yml up --build -d
 
 3. **Acesse a aplicação:**
 
-- **API**: http://localhost:8000
-- **Documentação Swagger**: http://localhost:8000/docs
-- **Documentação ReDoc**: http://localhost:8000/redoc
+- **API**: http://localhost:${PORT:-8000}
+- **Documentação Swagger**: http://localhost:${PORT:-8000}/docs
+- **Documentação ReDoc**: http://localhost:${PORT:-8000}/redoc
+
+> **Nota**: A porta padrão é 8000, mas pode ser alterada definindo a variável de ambiente `PORT`.
 
 ### 💻 Desenvolvimento Local
 

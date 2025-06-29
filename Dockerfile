@@ -20,6 +20,7 @@ COPY . .
 # Make entrypoint executable
 RUN chmod +x entrypoint.sh
 
-EXPOSE 8000
+# Expose port (will be overridden by PORT env var)
+EXPOSE ${PORT:-8000}
 
 ENTRYPOINT ["./entrypoint.sh"] 
