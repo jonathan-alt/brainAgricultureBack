@@ -16,6 +16,7 @@ from app.brain_agriculture.schemas.brain_agriculture import ProdutorCreate, Faze
 from app.brain_agriculture.schemas.brain_agriculture import DadosCompletosCreate, DadosCompletosResponse
 from app.brain_agriculture.schemas.brain_agriculture import ProdutorCompleto, FazendaCompleta
 from app.brain_agriculture.schemas.brain_agriculture import VincularFazendaProdutor, VincularProdutorFazenda
+from app.brain_agriculture.schemas.brain_agriculture import EstatisticasSafrasPorAno
 from app.brain_agriculture.services.brain_agriculture import Brain_AgricultureService
 
 logger = logging.getLogger(__name__)
@@ -298,8 +299,7 @@ async def update_fazenda(
             update_data['areatotalfazenda'] = fazenda_data.areatotalfazenda
         if fazenda_data.areaagricutavel is not None:
             update_data['areaagricutavel'] = fazenda_data.areaagricutavel
-        if fazenda_data.idprodutor is not None:
-            update_data['idprodutor'] = fazenda_data.idprodutor
+        # idprodutor é gerenciado automaticamente pelo backend
         
         result = await brain_agriculture_service.update_fazenda(fazenda_id, update_data)
         if not result.success:
@@ -358,6 +358,20 @@ async def get_estatisticas_culturas(
         return estatisticas
     except Exception as e:
         logger.error(f"Erro ao buscar estatísticas de culturas: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@r.get("/safras/estatisticas-por-ano", response_model=EstatisticasSafrasPorAno)
+@inject
+async def get_estatisticas_safras_por_ano(
+    brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
+):
+    """Busca estatísticas de safras agrupadas por ano"""
+    try:
+        estatisticas = await brain_agriculture_service.get_estatisticas_safras_por_ano()
+        return estatisticas
+    except Exception as e:
+        logger.error(f"Erro ao buscar estatísticas de safras por ano: {e}")
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
@@ -477,7 +491,7 @@ async def delete_safra(
         raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
-# Rota para processar dados completos (produtor, fazenda e safra)
+# Rota para processar dados completos (produtor, fazendas e safras)
 @r.post("/dados-completos", response_model=DadosCompletosResponse)
 @inject
 async def processar_dados_completos(
@@ -485,13 +499,60 @@ async def processar_dados_completos(
     brain_agriculture_service: Brain_AgricultureService = Depends(Provide[Container.brain_agriculture_service]),
 ):
     """
-    Processa dados completos de produtor, fazenda e safra de forma hierárquica.
+    Processa dados completos de produtor, fazendas e safras de forma hierárquica.
     
-    - Nenhum campo é obrigatório
-    - Safra nunca pode vir sozinha (deve vir com produtor e/ou fazenda)
-    - Salva primeiro produtor, depois fazenda (vinculando ao produtor), depois safra (vinculando à fazenda)
+    Cenários permitidos:
+    1. Produtor sozinho (obrigatório)
+    2. Produtor + Múltiplas Fazendas (produtor obrigatório, fazendas opcional)
+    3. Produtor + Múltiplas Fazendas + Múltiplas Safras (produtor obrigatório, fazendas e safras opcionais)
+    
+    Regras:
+    - Produtor é sempre obrigatório
+    - Se safras forem fornecidas, fazendas também devem ser fornecidas
     - Se produtor já existe (mesmo CPF), usa o existente
-    - Retorna os IDs dos registros criados/encontrados
+    - Se fazenda já existe (mesmo nome + produtor), usa a existente
+    - Fazendas são sempre vinculadas ao produtor fornecido (idprodutor gerenciado automaticamente)
+    - Safras são vinculadas às fazendas pelo nome (campo nomefazenda na safra)
+    - O nome da fazenda na safra deve corresponder ao nome de uma fazenda fornecida
+    - O campo idprodutor das fazendas é gerenciado automaticamente pelo backend
+    
+    Exemplo de payload:
+    {
+        "produtor": {
+            "cpf": "123.456.789-00",
+            "nomeprodutor": "João Silva"
+        },
+        "fazendas": [
+            {
+                "nomefazenda": "Fazenda A",
+                "cidade": "São Paulo",
+                "estado": "SP",
+                "areatotalfazenda": 100.0,
+                "areaagricutavel": 80.0
+            },
+            {
+                "nomefazenda": "Fazenda B",
+                "cidade": "Rio de Janeiro",
+                "estado": "RJ",
+                "areatotalfazenda": 150.0,
+                "areaagricutavel": 120.0
+            }
+        ],
+        "safras": [
+            {
+                "ano": 2025,
+                "cultura": "Soja",
+                "nomefazenda": "Fazenda A"
+            },
+            {
+                "ano": 2025,
+                "cultura": "Milho",
+                "nomefazenda": "Fazenda B"
+            }
+        ]
+    }
+    
+    Retorna os IDs dos registros criados/encontrados
     """
     try:
         result = await brain_agriculture_service.processar_dados_completos(dados)

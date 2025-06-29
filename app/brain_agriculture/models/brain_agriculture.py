@@ -15,7 +15,7 @@ class Fazenda(SQLModel, table=True):
     estado: str = Field(description="Estado da fazenda", max_length=100)
     areatotalfazenda: float = Field(description="Área total da fazenda em hectare")
     areaagricutavel: float = Field(description="Área agricultável em hectare")
-    idprodutor: int = Field(foreign_key="produtor.id", description="ID do produtor (chave estrangeira)")
+    idprodutor: Optional[int] = Field(default=None, foreign_key="produtor.id", description="ID do produtor (chave estrangeira)")
 
 
 class Safra(SQLModel, table=True):

@@ -5,7 +5,7 @@ from unittest.mock import Mock, AsyncMock
 from app.main import app
 from app.core.container import Container
 from app.brain_agriculture.models.brain_agriculture import Produtor, Fazenda, Safra
-from app.brain_agriculture.schemas.brain_agriculture import ReturnSucess, EstatisticasFazendas, FazendaPorEstado, EstatisticasCulturas, CulturaQuantidade, EstatisticasAreas, ResumoFazendas, FazendaResumida, ProdutorResumido, ProdutorCompleto, FazendaComSafras, FazendaCompleta, VincularFazendaProdutor, VincularProdutorFazenda
+from app.brain_agriculture.schemas.brain_agriculture import ReturnSucess, EstatisticasFazendas, FazendaPorEstado, EstatisticasCulturas, CulturaQuantidade, EstatisticasAreas, ResumoFazendas, FazendaResumida, ProdutorResumido, ProdutorCompleto, FazendaComSafras, FazendaCompleta, VincularFazendaProdutor, VincularProdutorFazenda, DadosCompletosResponse
 import app.brain_agriculture.api.v1.routes as routes_module
 
 @pytest.fixture
@@ -37,6 +37,7 @@ def mock_service():
     mock_service.get_fazenda_completa = AsyncMock()
     mock_service.vincular_fazenda_produtor = AsyncMock()
     mock_service.vincular_produtor_fazenda = AsyncMock()
+    mock_service.processar_dados_completos = AsyncMock()
     return mock_service
 
 class TestBrainAgricultureRoutes:
@@ -386,4 +387,205 @@ class TestBrainAgricultureRoutes:
                 response = client.post("/api/v1/vincular-produtor-fazenda", json=dados)
                 
                 assert response.status_code == 400
-                assert "Produtor com ID 999 não encontrado" in response.json()["detail"] 
+                assert "Produtor com ID 999 não encontrado" in response.json()["detail"]
+
+    def test_dados_completos_rollback_on_fazenda_error(self, mock_service):
+        """Testa se o rollback funciona quando há erro ao criar fazenda"""
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.processar_dados_completos.return_value = DadosCompletosResponse(
+                    success=False,
+                    message="Erro ao criar fazenda 'Fazenda Inválida': campo cidade é obrigatório",
+                    data={}
+                )
+                dados = {
+                    "produtor": {
+                        "cpf": "123.456.789-00",
+                        "nomeprodutor": "João Silva"
+                    },
+                    "fazendas": [
+                        {
+                            "nomefazenda": "Fazenda Válida",
+                            "cidade": "São Paulo",
+                            "estado": "SP",
+                            "areatotalfazenda": 100.0,
+                            "areaagricutavel": 80.0
+                        },
+                        {
+                            "nomefazenda": "Fazenda Inválida",
+                            "cidade": "",  # Campo obrigatório vazio para causar erro
+                            "estado": "SP",
+                            "areatotalfazenda": 100.0,
+                            "areaagricutavel": 80.0
+                        }
+                    ]
+                }
+                response = client.post("/api/v1/dados-completos", json=dados)
+                assert response.status_code == 400
+                data = response.json()
+                assert "erro" in data["detail"].lower()
+
+    def test_dados_completos_rollback_on_safra_error(self, mock_service):
+        """Testa se o rollback funciona quando há erro ao criar safra"""
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.processar_dados_completos.return_value = DadosCompletosResponse(
+                    success=False,
+                    message="Erro ao criar safra 2025-Soja: erro de banco de dados",
+                    data={}
+                )
+                dados_com_safra_invalida = {
+                    "produtor": {
+                        "cpf": "999.888.777-66",  # CPF que não existe no banco
+                        "nomeprodutor": "Pedro Costa"
+                    },
+                    "fazendas": [
+                        {
+                            "nomefazenda": "Fazenda Nova",
+                            "cidade": "Belo Horizonte",
+                            "estado": "MG",
+                            "areatotalfazenda": 200.0,
+                            "areaagricutavel": 180.0
+                        }
+                    ],
+                    "safras": [
+                        {
+                            "ano": 2025,
+                            "cultura": "Soja",
+                            "nomefazenda": "Fazenda Nova"  # Campo obrigatório incluído
+                        }
+                    ]
+                }
+                response = client.post("/api/v1/dados-completos", json=dados_com_safra_invalida)
+                assert response.status_code == 400
+                data = response.json()
+                assert "erro" in data["detail"].lower()
+
+    def test_dados_completos_rollback_on_unexpected_error(self, mock_service):
+        """Testa se o rollback funciona em caso de erro inesperado"""
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.processar_dados_completos.return_value = DadosCompletosResponse(
+                    success=False,
+                    message="Erro interno ao processar dados: valor muito grande para o campo",
+                    data={}
+                )
+                dados = {
+                    "produtor": {
+                        "cpf": "555.666.777-88",
+                        "nomeprodutor": "Ana Oliveira"
+                    },
+                    "fazendas": [
+                        {
+                            "nomefazenda": "Fazenda Grande",
+                            "cidade": "Brasília",
+                            "estado": "DF",
+                            "areatotalfazenda": 999999999.0,  # Valor muito grande
+                            "areaagricutavel": 999999999.0
+                        }
+                    ]
+                }
+                response = client.post("/api/v1/dados-completos", json=dados)
+                assert response.status_code == 400
+                data = response.json()
+                assert "erro" in data["detail"].lower()
+
+    def test_dados_completos_com_match_fazenda_por_nome(self, mock_service):
+        """Testa se o sistema de match por nome da fazenda funciona corretamente"""
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.processar_dados_completos.return_value = DadosCompletosResponse(
+                    success=True,
+                    message="Dados processados e salvos com sucesso",
+                    data={
+                        "produtor_id": 1,
+                        "fazendas_ids": [2, 3],
+                        "safras_ids": [4, 5]
+                    }
+                )
+                
+                dados = {
+                    "produtor": {
+                        "cpf": "123.456.789-00",
+                        "nomeprodutor": "João Silva"
+                    },
+                    "fazendas": [
+                        {
+                            "nomefazenda": "Fazenda A",
+                            "cidade": "São Paulo",
+                            "estado": "SP",
+                            "areatotalfazenda": 100.0,
+                            "areaagricutavel": 80.0
+                        },
+                        {
+                            "nomefazenda": "Fazenda B",
+                            "cidade": "Rio de Janeiro",
+                            "estado": "RJ",
+                            "areatotalfazenda": 150.0,
+                            "areaagricutavel": 120.0
+                        }
+                    ],
+                    "safras": [
+                        {
+                            "ano": 2025,
+                            "cultura": "Soja",
+                            "nomefazenda": "Fazenda A"
+                        },
+                        {
+                            "ano": 2025,
+                            "cultura": "Milho",
+                            "nomefazenda": "Fazenda B"
+                        }
+                    ]
+                }
+                
+                response = client.post("/api/v1/dados-completos", json=dados)
+                
+                assert response.status_code == 200
+                data = response.json()
+                assert data["success"] is True
+                assert "processados e salvos com sucesso" in data["message"]
+                assert "produtor_id" in data["data"]
+                assert "fazendas_ids" in data["data"]
+                assert "safras_ids" in data["data"]
+
+    def test_dados_completos_fazenda_nao_encontrada_para_safra(self, mock_service):
+        """Testa se retorna erro quando safra referencia fazenda inexistente"""
+        with TestClient(app) as client:
+            container = app.container
+            with container.brain_agriculture_service.override(mock_service):
+                mock_service.processar_dados_completos.return_value = DadosCompletosResponse(
+                    success=False,
+                    message="Fazenda 'Fazenda Inexistente' não encontrada para a safra 2025-Soja",
+                    data={}
+                )
+                dados = {
+                    "produtor": {
+                        "cpf": "123.456.789-00",
+                        "nomeprodutor": "João Silva"
+                    },
+                    "fazendas": [
+                        {
+                            "nomefazenda": "Fazenda A",
+                            "cidade": "São Paulo",
+                            "estado": "SP",
+                            "areatotalfazenda": 100.0,
+                            "areaagricutavel": 80.0
+                        }
+                    ],
+                    "safras": [
+                        {
+                            "ano": 2025,
+                            "cultura": "Soja",
+                            "nomefazenda": "Fazenda Inexistente"  # Fazenda que não existe
+                        }
+                    ]
+                }
+                response = client.post("/api/v1/dados-completos", json=dados)
+                assert response.status_code == 400
+                data = response.json()
+                assert "não encontrada" in data["detail"] 

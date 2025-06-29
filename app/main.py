@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import Request
+import os
 
 from app.core.container import Container
 from app.brain_agriculture.api.v1.routes import brain_agriculture_router
@@ -22,13 +23,18 @@ def create_app():
 
     @app.on_event("startup")
     async def startup():
+        # Garantir que as variáveis de ambiente estejam definidas
+        if not os.environ.get("ENVIRONMENT"):
+            os.environ["ENVIRONMENT"] = "development"
+        
         container = Container()
         app.container = container
-        await container.init_resources()
+        container.init_resources()
 
     @app.on_event("shutdown")
     async def shutdown():
-        await app.container.shutdown_resources()
+        if hasattr(app, 'container'):
+            app.container.shutdown_resources()
 
     app.include_router(brain_agriculture_router, prefix="/api/v1", tags=["Brain_Agriculture"])
 

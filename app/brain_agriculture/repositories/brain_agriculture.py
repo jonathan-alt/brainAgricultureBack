@@ -146,6 +146,20 @@ class Brain_AgricultureRepository(BaseRepository):
             results = session.exec(statement).all()
             return results
 
+    def get_fazenda_by_nome_and_produtor(self, nomefazenda: str, produtor_id: int) -> Optional[Fazenda]:
+        """Busca uma fazenda pelo nome e produtor"""
+        if self.db is None:
+            logger.warning("Banco de dados não disponível")
+            return None
+        
+        with Session(self.db) as session:
+            statement = select(Fazenda).where(
+                Fazenda.nomefazenda == nomefazenda,
+                Fazenda.idprodutor == produtor_id
+            )
+            result = session.exec(statement).first()
+            return result
+
     def create_fazenda(self, fazenda: Fazenda) -> Fazenda:
         """Cria uma nova fazenda"""
         if self.db is None:
@@ -300,20 +314,16 @@ class Brain_AgricultureRepository(BaseRepository):
             return []
         
         with Session(self.db) as session:
-            # Query para contar fazendas por estado
             from sqlalchemy import func
-            from sqlmodel import text
             
-            query = text("""
-                SELECT 
-                    estado,
-                    COUNT(*) as quantidade
-                FROM fazenda 
-                GROUP BY estado 
-                ORDER BY quantidade DESC
-            """)
+            # Usar SQLAlchemy ORM em vez de query raw
+            result = session.exec(
+                select(
+                    Fazenda.estado,
+                    func.count(Fazenda.id).label("quantidade")
+                ).group_by(Fazenda.estado).order_by(func.count(Fazenda.id).desc())
+            ).all()
             
-            result = session.exec(query)
             return [{"estado": row.estado, "quantidade": row.quantidade} for row in result]
 
     def get_total_fazendas(self) -> int:
@@ -349,6 +359,23 @@ class Brain_AgricultureRepository(BaseRepository):
             statement = select(Safra.cultura, func.count(Safra.id).label("quantidade")).group_by(Safra.cultura).order_by(func.count(Safra.id).desc())
             result = session.exec(statement).all()
             return [{"cultura": row.cultura, "quantidade": row.quantidade} for row in result]
+
+    def get_safras_por_ano(self) -> List[dict]:
+        """Retorna o total de safras agrupadas por ano"""
+        if self.db is None:
+            logger.warning("Banco de dados não disponível, retornando lista vazia")
+            return []
+        
+        with Session(self.db) as session:
+            from sqlalchemy import func
+            result = session.exec(
+                select(
+                    Safra.ano,
+                    func.count(Safra.id).label("quantidade")
+                ).group_by(Safra.ano).order_by(Safra.ano.desc())
+            ).all()
+            
+            return [{"ano": row.ano, "quantidade": row.quantidade} for row in result]
 
     def get_estatisticas_areas(self) -> dict:
         """Retorna estatísticas de áreas das fazendas (total, agricultável e vegetação)"""

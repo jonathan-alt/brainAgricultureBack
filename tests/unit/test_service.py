@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch
 from app.brain_agriculture.services.brain_agriculture import Brain_AgricultureService
-from app.brain_agriculture.schemas.brain_agriculture import Produtor, Fazenda, Safra, ReturnSucess, ProdutorCreate, FazendaCreate, DadosCompletosCreate, VincularFazendaProdutor, VincularProdutorFazenda
+from app.brain_agriculture.schemas.brain_agriculture import Produtor, Fazenda, Safra, ReturnSucess, ProdutorCreate, FazendaCreate, DadosCompletosCreate, VincularFazendaProdutor, VincularProdutorFazenda, SafraCreateComFazenda
 
 
 class TestBrainAgricultureService:
@@ -263,42 +263,67 @@ class TestBrainAgricultureService:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_create_fazenda_without_produtor_id(self, service, mock_repository_methods):
-        """Testa criação de fazenda sem fornecer idprodutor"""
+    async def test_create_fazenda_without_produtor_id(self, service, mock_repository_methods, sample_fazenda):
+        """Testa criação de fazenda sem fornecer idprodutor (agora permitido)"""
         fazenda_data = FazendaCreate(
             nomefazenda="Fazenda Teste",
             cidade="São Paulo",
             estado="SP",
             areatotalfazenda=100.0,
-            areaagricutavel=80.0,
-            idprodutor=None
+            areaagricutavel=80.0
         )
+        
+        # Mock da criação da fazenda
+        mock_repository_methods.create_fazenda.return_value = sample_fazenda
         
         result = await service.create_fazenda(fazenda_data)
         
-        assert result.success is False
-        assert "ID do produtor é obrigatório" in result.message
+        assert result.success is True
+        assert "Fazenda criada com sucesso" in result.message
 
     @pytest.mark.asyncio
     async def test_processar_dados_completos_fazenda_sem_produtor(self, service, mock_repository_methods):
         """Testa processamento de dados completos com fazenda sem produtor nem idprodutor"""
-        dados = DadosCompletosCreate(
-            produtor=None,
-            fazenda=FazendaCreate(
-                nomefazenda="Fazenda Teste",
-                cidade="São Paulo",
-                estado="SP",
-                areatotalfazenda=100.0,
-                areaagricutavel=80.0,
-                idprodutor=None
-            ),
-            safra=None
+        from app.brain_agriculture.schemas.brain_agriculture import DadosCompletosCreate, ProdutorCreate, SafraCreateComFazenda
+        from app.brain_agriculture.models.brain_agriculture import Produtor
+        from app.brain_agriculture.schemas.brain_agriculture import FazendaCreate
+        from unittest.mock import patch
+        sample_produtor = Produtor(
+            id=1,
+            cpf="123.456.789-00",
+            nomeprodutor="João Silva"
         )
-        
-        result = await service.processar_dados_completos(dados)
-        
-        assert result.success is False
-        assert "É necessário fornecer um produtor ou o ID do produtor na fazenda" in result.message
+        dados = DadosCompletosCreate(
+            produtor=ProdutorCreate(
+                cpf="123.456.789-00",
+                nomeprodutor="João Silva"
+            ),
+            fazendas=[
+                FazendaCreate(
+                    nomefazenda="Fazenda Teste",
+                    cidade="São Paulo",
+                    estado="SP",
+                    areatotalfazenda=100.0,
+                    areaagricutavel=80.0,
+                    idprodutor=None
+                )
+            ],
+            safras=[
+                SafraCreateComFazenda(
+                    ano=2025,
+                    cultura="Soja",
+                    nomefazenda="Fazenda Teste"
+                )
+            ]
+        )
+        # Mock para simular erro ao criar fazenda
+        mock_repository_methods.get_produtor_by_cpf.return_value = None
+        mock_repository_methods.create_produtor.return_value = sample_produtor
+        with patch.object(mock_repository_methods, "get_fazenda_by_nome_and_produtor", return_value=None):
+            mock_repository_methods.create_fazenda.side_effect = Exception("Erro ao criar fazenda")
+            result = await service.processar_dados_completos(dados)
+            assert result.success is False
+            assert "erro" in result.message.lower()
 
     @pytest.mark.asyncio
     async def test_vincular_fazenda_produtor_success(self, service, mock_repository_methods, sample_fazenda, sample_produtor):
