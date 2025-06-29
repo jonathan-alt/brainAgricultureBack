@@ -17,10 +17,10 @@ RUN pip install --no-cache-dir -r development.txt
 # Copy application code
 COPY . .
 
-# Make entrypoint executable
-RUN chmod +x entrypoint.sh
+# Make entrypoints executable
+RUN chmod +x entrypoint.sh entrypoint.dev.sh
 
 # Expose port (will be overridden by PORT env var)
 EXPOSE ${PORT:-8000}
 
-ENTRYPOINT ["./entrypoint.sh"] 
+ENTRYPOINT ["./entrypoint.dev.sh"] 
