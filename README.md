@@ -11,6 +11,8 @@ Backend para aplicação de agricultura inteligente desenvolvido com FastAPI, Po
 
 ### 🐳 Com Docker (Recomendado)
 
+#### **Desenvolvimento**
+
 1. **Clone o repositório:**
 
 ```bash
@@ -31,6 +33,26 @@ docker-compose -f development.yml up --build -d
 - **Documentação ReDoc**: http://localhost:${PORT:-8000}/redoc
 
 > **Nota**: A porta padrão é 8000, mas pode ser alterada definindo a variável de ambiente `PORT`.
+
+#### **Produção**
+
+1. **Execute a aplicação:**
+
+```bash
+docker-compose -f production.yml up --build -d
+```
+
+2. **Acesse a aplicação:**
+
+- **API**: http://localhost:${PORT:-8000}
+- **Documentação Swagger**: http://localhost:${PORT:-8000}/docs
+- **Documentação ReDoc**: http://localhost:${PORT:-8000}/redoc
+
+> **Diferenças para produção:**
+>
+> - Sem `--reload` (não reinicia automaticamente)
+> - `restart: unless-stopped` (reinicia automaticamente em caso de falha)
+> - `ENVIRONMENT=production`
 
 ### 💻 Desenvolvimento Local
 
@@ -118,11 +140,14 @@ brainAgricultureBack/
 │   └── conftest.py               # Configurações de teste
 ├── requirements/                 # Dependências Python
 ├── scripts/                      # Scripts utilitários
-├── Dockerfile                    # Container da aplicação
+├── Dockerfile                    # Container da aplicação (desenvolvimento)
+├── Dockerfile.prod               # Container da aplicação (produção)
 ├── Dockerfile.test               # Container para testes
 ├── development.yml               # Docker Compose para desenvolvimento
+├── production.yml                # Docker Compose para produção
 ├── docker-compose.test.yml       # Docker Compose para testes
-├── entrypoint.sh                 # Script de inicialização
+├── entrypoint.sh                 # Script de inicialização (produção)
+├── entrypoint.dev.sh             # Script de inicialização (desenvolvimento)
 ├── run_tests.sh                  # Script inteligente de testes
 ├── run_tests_docker.sh           # Script Docker de testes
 ├── pyproject.toml                # Configuração Poetry
@@ -133,6 +158,8 @@ brainAgricultureBack/
 ## 🔧 Comandos Úteis
 
 ### 🐳 Docker
+
+#### **Desenvolvimento**
 
 ```bash
 # Iniciar aplicação
@@ -146,6 +173,25 @@ docker-compose -f development.yml logs -f
 
 # Rebuild e reiniciar
 docker-compose -f development.yml up --build --force-recreate -d
+```
+
+#### **Produção**
+
+```bash
+# Iniciar aplicação
+docker-compose -f production.yml up --build -d
+
+# Parar aplicação
+docker-compose -f production.yml down
+
+# Ver logs
+docker-compose -f production.yml logs -f
+
+# Rebuild e reiniciar
+docker-compose -f production.yml up --build --force-recreate -d
+
+# Verificar status
+docker-compose -f production.yml ps
 ```
 
 ### 🧪 Testes
