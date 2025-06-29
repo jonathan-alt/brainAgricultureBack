@@ -15,5 +15,6 @@ python scripts/check_tables.py
 echo "Verificando se é necessário criar tabelas..."
 python scripts/setup_db.py
 
+echo "verificando porta $PORT"
 
 uvicorn app.main:app --host 0.0.0.0 --port $PORT
